@@ -25,16 +25,19 @@ namespace GenericBot
             result = result.Replace(@"_", @"\_");
             result = result.Replace(@"~", @"\~");
             result = result.Replace(@"`", @"\`");
+            result = result.Replace(@"|", @"\|");
 
             return result;
         }
 
-        public static string GetDisplayName(this SocketGuildUser user)
+        public static string GetDisplayName(this SocketUser user)
         {
-            if (string.IsNullOrEmpty(user.Nickname))
-                return user.Username;
+            SocketGuildUser guildUser = user as SocketGuildUser;
 
-            return user.Nickname;
+            if (guildUser != null && !string.IsNullOrEmpty(guildUser.Nickname))
+                return guildUser.Nickname;
+
+            return user.Username;
         }
 
         public static SocketGuild GetGuild(this SocketMessage msg)
@@ -42,19 +45,27 @@ namespace GenericBot
             return ((SocketGuildChannel)msg.Channel).Guild;
         }
 
-        public static Task<RestUserMessage> ReplyAsync(this SocketMessage msg, object text)
+        public static Task<RestUserMessage> ReplyAsync(this SocketMessage msg, object text, bool sanitize = true)
         {
-            return msg.Channel.SendMessageAsync(text.ToString().Replace("@everyone", "@-everyone")
-                .Replace("@here", "@-here"));
+            return msg.Channel.SendMessageAsync(Sanitize(text.ToString(), sanitize));
+        }
+        private static string Sanitize(string input, bool doSanitize)
+        {
+            if (!doSanitize)
+                return input;
+            else
+                return input
+                    .Replace("@everyone", "@-everyone")
+                    .Replace("@here", "@-here");
         }
 
-        public static bool Empty(this List<string> list)
+        public static bool IsEmpty(this List<string> list)
         {
             if (list == null) return true;
             return list.All(i => string.IsNullOrEmpty(i.Trim()));
         }
 
-        public static string reJoin(this List<string> list, string joinChar = " ")
+        public static string Rejoin(this List<string> list, string joinChar = " ")
         {
             if (list.Count == 0) return "";
             return list.Aggregate((i, j) => i + joinChar + j);
@@ -91,8 +102,15 @@ namespace GenericBot
                 output = default(T);
                 return false;
             }
-            catch
+            catch (NullReferenceException)
             {
+
+                output = default(T);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Core.Logger.LogErrorMessage(ex, null);
                 output = default(T);
                 return false;
             }
@@ -114,18 +132,21 @@ namespace GenericBot
 
         public static List<IMessage> GetManyMessages(this SocketTextChannel channel, int count)
         {
+            return null;
+            /*
             count++;
-            var msgs = (channel as IMessageChannel).GetMessagesAsync().Flatten().ToList().Result;
+            List<IMessage> msgs = (channel as IMessageChannel).GetMessagesAsync().ToListAsync().Result;
 
             while (true)
             {
-                var newmsgs = (channel as IMessageChannel).GetMessagesAsync(msgs.Last(), Direction.Before)
-                    .Flatten().ToList().Result;
+                var newmsgs = (channel as IMessageChannel).GetMessagesAsync(msgs.Last().Last().Id, Direction.Before, 100, CacheMode.AllowDownload, null)
+                    .ToListAsync().Result;
                 msgs = msgs.Concat(newmsgs).ToList();
                 if (newmsgs.Count() < 100 || msgs.Count() > count) break;
             }
 
             return msgs.Distinct().Take(count).ToList();
+            */
         }
 
         public static T GetRandomItem<T>(this List<T> list)
@@ -133,27 +154,40 @@ namespace GenericBot
             return list[new Random().Next(0, list.Count - 1)];
         }
 
-        public static List<string> SplitSafe(this string input, char spl = ' ')
+        /**
+         * Splits a long message to smaller messages of a given maximum length each on a specific character.
+         *
+         * This function will ensure the message splits *only* happen on the given split character, which can be used
+         * to prevent breaking markup across split points by passing a delimiter known to be outside any markup.
+         */
+        public static List<string> MessageSplit(this string input, char delimiter = ' ', int maxLineLength = 1800)
         {
             List<string> output = new List<string>();
-            var strings = input.Split(spl);
+            var stringComponents = input.Split(delimiter);
 
-            string temp = "";
-            foreach (var s in strings)
+            var accumulator = "";
+            for (var i = 0; i < stringComponents.Length; i++)
             {
-                if (temp.Length + s.Length < 1800)
+                var currentSubstring = stringComponents[i];
+                
+                if (accumulator.Length + currentSubstring.Length < maxLineLength)
                 {
-                    temp += spl + s;
+                    accumulator += currentSubstring;
+                    
+                    // If this isn't the last substring, we add a delimiter.
+                    if (i < stringComponents.Length - 1) accumulator += delimiter;
                 }
                 else
                 {
-                    output.Add(temp);
-                    temp = s;
+                    // Finish off the accumulator we have, and start a new one containing the current substring
+                    output.Add(accumulator);
+                    accumulator = currentSubstring;
                 }
             }
-
-            output.Add(temp);
-
+            
+            // We're done, add whatever's left in the accumulator to the last line (or in single-line cases, all our
+            // input text), and return it.
+            output.Add(accumulator);
             return output;
         }
 
@@ -163,7 +197,7 @@ namespace GenericBot
             {
                 return input;
             }
-            else return input.Substring(0, length) + "...";
+            else return input.Substring(0, length-1) + "\u2026";
         }
 
         public static string SumAnd<T>(this List<T> input)
@@ -282,5 +316,13 @@ namespace GenericBot
             return offset;
         }
 
+        public static string Truncate(this string input, int maxLength, string ellipsis = "\u2026", bool end = false)
+        {
+            if (input.Length <= maxLength) return input;
+            
+            if (end)
+                return input.Substring(input.Length - maxLength - ellipsis.Length - 1) + ellipsis;
+            return input.Substring(0, maxLength - ellipsis.Length) + ellipsis;
+        }
     }
 }

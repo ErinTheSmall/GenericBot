@@ -2,6 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson.Serialization.Options;
+using MongoDB.Driver;
 using Newtonsoft.Json;
 
 namespace GenericBot.Entities
@@ -17,78 +21,35 @@ namespace GenericBot.Entities
             Aggressive = 8,
             ActiveRaid = 16
         }
-        public ulong GuildId;
-        public List<ulong> AdminRoleIds;
-        public List<ulong> ModRoleIds;
-        public List<ulong> UserRoleIds;
-        public List<ulong> AutoRoleIds;
-        public ulong UserLogChannelId;
-        public List<ulong> MessageLoggingIgnoreChannels = new List<ulong>();
-        public ulong VerifiedRole = 0;
-        public string VerifiedMessage;
-        public AntiSpamLevel AntispamLevel = GuildConfig.AntiSpamLevel.None;
-
-        public string PointsName = "point";
-        public string PointsVerb = "used";
-        public bool PointsEnabled = false;
-        public Dictionary<decimal, ulong> Levels = new Dictionary<decimal, ulong>();
-
-        public bool GlobalBanOptOut = false;
-
-        public ulong FourChannelId;
-        public string Prefix;
-        public bool AllowTwitter = false;
-        public Giveaway Giveaway;
-
-        public List<ChannelMute> ChannelMutes = new List<ChannelMute>();
-        public List<CustomCommand> CustomCommands;
-        public List<CustomAlias> CustomAliases;
-
-        public List<ulong> ProbablyMutedUsers = new List<ulong>();
-        public ulong MutedRoleId = 0;
-        public List<GenericBan> Bans = new List<GenericBan>();
-
-        public Dictionary<ulong, Discord.OverwritePermissions> ChannelOverrideDefaults = new Dictionary<ulong, Discord.OverwritePermissions>();
+        [BsonId]
+        public ulong Id { get; set; }
+        public string Prefix { get; set; }
+        public List<ulong> AdminRoleIds { get; set; }
+        public List<ulong> ModRoleIds { get; set; }
+        [BsonDictionaryOptions(DictionaryRepresentation.ArrayOfArrays)]
+        public Dictionary<string, List<ulong>> UserRoles { get; set; }
+        public ulong MutedRoleId { get; set; }
+        public List<ulong> MutedUsers { get; set; }
+        public List<ulong> AutoRoleIds { get; set; }
+        public ulong LoggingChannelId { get; set; }
+        public List<ulong> MessageLoggingIgnoreChannels { get; set; }
+        public ulong VerifiedRole { get; set; }
+        public string VerifiedMessage { get; set; }
+        public string JoinMessage { get; set; }
+        public ulong JoinMessageChannelId { get; set; }
+        public AntiSpamLevel AntispamLevel { get; set; }
 
         public GuildConfig(ulong id)
         {
-            GuildId = id;
+            Id = id;
+            VerifiedRole = 0;
+            AntispamLevel = AntiSpamLevel.None;
+            MessageLoggingIgnoreChannels = new List<ulong>();
+            MutedUsers = new List<ulong>();
             AdminRoleIds = new List<ulong>();
             ModRoleIds = new List<ulong>();
-            UserRoleIds = new List<ulong>();
+            UserRoles = new Dictionary<string, List<ulong>>();
             AutoRoleIds = new List<ulong>();
-            CustomCommands = new List<CustomCommand>();
-            CustomAliases = new List<CustomAlias>();
-            Bans = new List<GenericBan>();
-
-            Prefix = "";
-        }
-
-        public GuildConfig Save()
-        {
-            if (!GenericBot.GuildConfigs.Any(kvp => kvp.Key.Equals(GuildId)))
-            {
-                GenericBot.GuildConfigs.Add(GuildId, this);
-            }
-            else
-            {
-                GenericBot.GuildConfigs[GuildId] = this;
-            }
-            File.WriteAllText($"files/guildConfigs/{this.GuildId}.json", JsonConvert.SerializeObject(this, Formatting.Indented));
-            return this;
-        }
-
-        public bool AddBan(GenericBan ban)
-        {
-            try
-            {
-                var guild = GenericBot.DiscordClient.GetGuild(GuildId);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
         }
     }
 

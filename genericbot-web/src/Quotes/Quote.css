@@ -1,0 +1,48 @@
+.Quote {
+    padding: 4px 12px;
+    margin: 24px 48px 12px 24px;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    display: flex;
+}
+.QuoteIdBox{
+    display: flex;
+    min-width: 36px;
+    align-items: center;
+    border: 2px solid rgb(186, 174, 255, 0.438);
+    border-radius: 8px 2px 2px 8px;
+    background: rgb(186, 174, 255);
+    padding: 2px 2px 2px 4px;
+    margin-right: 4px;
+}
+.QuoteId{
+    text-align: center;
+    flex-grow: 1;
+}
+.QuoteContent{
+    border: 2px solid rgb(186, 174, 255, 0.438);
+    border-radius: 2px 8px 8px 2px;
+    padding: 2px 2px 2px 4px;
+    flex-grow: 2;
+}
+.Admin{
+    border-radius: 2px;
+}
+.DeleteButton{
+    background-color: rgba(0, 0, 0, 0);
+    color: #FF0000;
+    float:right;
+    margin-left: 4px;
+    border: 1.5px solid rgba(255, 0, 0, 0.438);
+    border-radius: 2px 8px 8px 2px;
+    -o-transition: .1s;
+    -ms-transition:.1s;
+    -moz-transition: .1s;
+    -webkit-transition: .1s;
+    transition: .1s;
+
+}
+.DeleteButton:hover{
+    background-color: #ff0000;
+    color:white;
+}

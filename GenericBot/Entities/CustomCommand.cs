@@ -1,13 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using MongoDB.Bson.Serialization.Attributes;
+using System.Collections.Generic;
 
 namespace GenericBot.Entities
 {
+    [BsonIgnoreExtraElements]
     public class CustomCommand
     {
-        public string Name;
-        public List<string> Aliases;
-        public bool Delete;
-        public string Response;
+        public string Name { get; set; }
+        public bool Delete { get; set; }
+        public string Response { get; set; }
 
         public CustomCommand()
         {
@@ -16,7 +17,6 @@ namespace GenericBot.Entities
         public CustomCommand(string name, string response)
         {
             this.Name = name;
-            this.Aliases = new List<string>();
             this.Delete = false;
             this.Response = response;
         }

@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.Common;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Discord.WebSocket;
 
 namespace GenericBot.Entities
 {
+    /// <summary>
+    /// Raw Command object to build
+    /// </summary>
     public class Command
     {
         public enum PermissionLevels
@@ -17,8 +18,7 @@ namespace GenericBot.Entities
             Admin,
             GuildOwner,
             GlobalAdmin,
-            BotOwner,
-            Laterallyimpossible
+            BotOwner
         }
 
         public string Name;
@@ -27,6 +27,7 @@ namespace GenericBot.Entities
         public string Usage;
         public bool Delete = false;
         public bool SendTyping = true;
+        public bool WorksInDms = false;
         public PermissionLevels RequiredPermission = PermissionLevels.User;
 
         public Command(string n)
@@ -35,59 +36,108 @@ namespace GenericBot.Entities
             this.Usage = this.Name;
         }
 
-
-        public delegate Task ExecuteDelegate(DiscordShardedClient client, SocketMessage msg, List<string> parameters);
+        public delegate Task ExecuteDelegate(ParsedCommand command);
 
         public ExecuteDelegate ToExecute = null;
 
-        public async Task ExecuteCommand(DiscordShardedClient client, SocketMessage msg, List<string> parameters = null)
+        public async Task ExecuteCommand(ParsedCommand command)
         {
-            if (GetPermissions(msg.Author, (msg.Channel as SocketGuildChannel).Guild.Id) < RequiredPermission)
+            if (GetPermissions(command) < RequiredPermission)
+            {
+                await command.Message.ReplyAsync($"I'm sorry, {command.Author.GetDisplayName()}. I'm afraid I can't do that.");
                 return;
+            }
 
-            if (SendTyping) await msg.Channel.TriggerTypingAsync();
+            if (this.RequiredPermission >= PermissionLevels.Moderator && this.RequiredPermission < PermissionLevels.GlobalAdmin && this.Name != "audit")
+                Core.AddToAuditLog(command, command.Guild.Id);
+
+            if (SendTyping) await command.Message.Channel.TriggerTypingAsync();
             if (Delete)
             {
                 try
                 {
-                    await msg.DeleteAsync();
+                    await command.Message.DeleteAsync();
                 }
-#pragma warning disable CS0168 // Variable is declared but never used
-                catch (Discord.Net.HttpException httpException)
-#pragma warning restore CS0168 // Variable is declared but never used
-                {
-                    await GenericBot.Logger.LogErrorMessage(
-                        $"Could Not Delete Message {msg.Id} CHANNELID {msg.Channel.Id}");
+                catch (Discord.Net.HttpException ex)
+                { 
+                    await Core.Logger.LogErrorMessage(ex, command);
                 }
             }
 
             try
             {
-                await ToExecute(client, msg, parameters);
+                await ToExecute(command);
             }
             catch (Exception ex)
             {
-                if (msg.Author.Id == GenericBot.GlobalConfiguration.OwnerId)
+                if (command.Message.Author.Id == Core.GetOwnerId())
                 {
-                    await msg.ReplyAsync("```\n" + $"{ex.Message}\n{ex.StackTrace}".SafeSubstring(1600) +
+                    await (command.Message as SocketMessage).ReplyAsync("```\n" + $"{ex.Message}\n{ex.StackTrace}".SafeSubstring(1600) +
                                                       "\n```");
                 }
-                await GenericBot.Logger.LogErrorMessage(ex.Message+"\n"+ex.StackTrace);
+                await Core.Logger.LogErrorMessage(ex, command);
             }
         }
 
-        public PermissionLevels GetPermissions(SocketUser user, ulong guildId)
+        public PermissionLevels GetPermissions(ParsedCommand context)
         {
-            if (user.Id.Equals(GenericBot.GlobalConfiguration.OwnerId)) return PermissionLevels.BotOwner;
-            else if (GenericBot.GlobalConfiguration.GlobalAdminIds.Contains(user.Id))
-                return PermissionLevels.GlobalAdmin;
-            else if(GenericBot.DiscordClient.GetGuild(guildId).Owner.Id == user.Id)
-                return PermissionLevels.GuildOwner;
-            else if (((SocketGuildUser) user).Roles.Select(r => r.Id).Intersect(GenericBot.GuildConfigs[guildId].AdminRoleIds).Any())
+            if (context.Channel is SocketDMChannel)
                 return PermissionLevels.Admin;
-            else if (((SocketGuildUser) user).Roles.Select(r => r.Id).Intersect(GenericBot.GuildConfigs[guildId].ModRoleIds).Any())
+            else if (context.Author.Id.Equals(Core.GetOwnerId()))
+                return PermissionLevels.BotOwner;
+            else if (Core.CheckGlobalAdmin(context.Author.Id))
+                return PermissionLevels.GlobalAdmin;
+            else if(IsGuildAdmin(context.Author, context.Guild.Id))
+                return PermissionLevels.GuildOwner;
+            else if (((SocketGuildUser)context.Author).Roles.Select(r => r.Id).Intersect(Core.GetGuildConfig(context.Guild.Id).AdminRoleIds).Any())
+                return PermissionLevels.Admin;
+            else if (((SocketGuildUser)context.Author).Roles.Select(r => r.Id).Intersect(Core.GetGuildConfig(context.Guild.Id).ModRoleIds).Any())
                 return PermissionLevels.Moderator;
             else return PermissionLevels.User;
+        }
+        private bool IsGuildAdmin(SocketUser user, ulong guildId)
+        {
+            var guild = Core.GetGuid(guildId);
+            if (guild.Owner.Id == user.Id)
+                return true;
+            else if (guild.GetUser(user.Id).Roles.Any(r => r.Permissions.Administrator))
+                return true;
+            return false;
+        }
+
+        public ParsedCommand ParseMessage(SocketMessage msg)
+        {
+            ParsedCommand parsedCommand = new ParsedCommand();
+            parsedCommand.Message = msg;
+            string message = msg.Content;
+            string pref = Core.GetPrefix(parsedCommand);
+
+            if (!message.StartsWith(pref)) return null;
+            message = message.Substring(pref.Length);
+            string commandId = message.Split(' ')[0].ToLower();
+            parsedCommand.Name = commandId;
+
+            if (Core.Commands.HasElement(c => commandId.Equals(c.Name) || c.Aliases.Any(a => commandId.Equals(a)), out Command cmd))
+            {
+                parsedCommand.RawCommand = cmd;
+            }
+            else
+            {
+                parsedCommand.RawCommand = null;
+            }
+
+            try
+            {
+                string param = message.Substring(commandId.Length);
+                parsedCommand.ParameterString = param.Trim();
+                parsedCommand.Parameters = param.Split().Where(p => !string.IsNullOrEmpty(p.Trim())).ToList();
+            }
+            catch (Exception ex)
+            {
+                Core.Logger.LogErrorMessage(ex, parsedCommand);
+            }
+
+            return parsedCommand;
         }
     }
 }

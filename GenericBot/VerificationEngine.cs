@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Text.RegularExpressions;
+using Discord;
 using Discord.WebSocket;
 
 namespace GenericBot
@@ -15,14 +17,28 @@ namespace GenericBot
 
         public static SocketGuild GetGuildFromCode(string code, ulong userId)
         {
-            var pid = int.Parse(userId.ToString().Substring(7, 6));
-            var sum = Convert.ToInt32(StringToHex(code.ToLower()), 16);
-            var gid = sum - pid;
+            try
+            {
+                var pid = int.Parse(userId.ToString().Substring(7, 6));
+                var sum = Convert.ToInt32(StringToHex(code.ToLower()), 16);
+                var gid = sum - pid;
 
-            if (GenericBot.DiscordClient.Guilds.HasElement(g => g.Id.ToString().Contains(gid.ToString()),
-                out SocketGuild guild))
-                return guild;
-            return null;
+                if (Core.DiscordClient.Guilds.HasElement(g => g.Id.ToString().Contains(gid.ToString()),
+                    out SocketGuild guild))
+                {
+                    Core.AddVerificationEvent(userId, guild.Id);
+                    return guild;
+                }
+                return null;
+            }
+            catch
+            {
+                // This log throws way too much. It's fine to ignore errors, 
+                // because it means there was a string parsing error. There's no 
+                // better way to detect them easily
+                //Core.Logger.LogErrorMessage(ex, null);
+                return null;
+            }
         }
 
         public static string InsertCodeInMessage(string message, string code)
@@ -70,6 +86,34 @@ namespace GenericBot
             str = str.Replace('z', '8');
             str = str.Replace('v', '9');
             return str;
+        }
+
+        public static string ConstructWelcomeMessage(string message, IUser user)
+        {
+            message = Regex.Replace(message, "{{username}}", user.Username, RegexOptions.IgnoreCase);
+            message = Regex.Replace(message, "{{usermention}}", user.Mention, RegexOptions.IgnoreCase);
+            message = Regex.Replace(message, "{{user}}", user.Mention, RegexOptions.IgnoreCase);
+            return message;
+        }
+    }
+
+    public class VerificationEvent
+    {
+        public ulong GuildId { get; set; }
+        public ulong UserId { get; set; }
+        public DateTimeOffset DateTime { get; set; }
+        public bool IsRevoked { get; set; }
+
+        public VerificationEvent(ulong guildId, ulong userId)
+        {
+            this.GuildId = guildId;
+            this.UserId = userId;
+            this.DateTime = DateTimeOffset.UtcNow;
+            this.IsRevoked = false;
+        }
+        public VerificationEvent()
+        {
+
         }
     }
 }

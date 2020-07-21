@@ -1,0 +1,24 @@
+.Sidebar{ 
+    width: 230px;
+    height:100%;
+    background-color: #181b20;
+    position:fixed!important;
+    z-index:1;
+    overflow:auto;
+    text-align: center;
+}
+h1,h3{
+    color: rgb(186, 174, 255);
+    margin: 8px;
+}
+h1{
+    font-size: 1.8rem;
+}
+h3{
+    font-size: 1.2rem;
+}
+hr {
+    color: 22D3D3;
+    margin-left: 12px;
+    margin-right: 12px;
+}
